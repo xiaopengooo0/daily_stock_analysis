@@ -69,13 +69,35 @@ class ChipStructure(BaseModel):
     chip_health: Optional[str] = None
 
 
+class ExtendedIndicators(BaseModel):
+    """Extended technical indicators: K-line pattern, Bollinger, ATR, KDJ, OBV."""
+
+    kline_pattern: Optional[str] = None
+    kline_signal: Optional[str] = None
+    boll_upper: Optional[Union[int, float, str]] = None
+    boll_middle: Optional[Union[int, float, str]] = None
+    boll_lower: Optional[Union[int, float, str]] = None
+    boll_position: Optional[str] = None
+    atr_14: Optional[Union[int, float, str]] = None
+    atr_stop_loss_hint: Optional[Union[int, float, str]] = None
+    kdj_k: Optional[Union[int, float, str]] = None
+    kdj_d: Optional[Union[int, float, str]] = None
+    kdj_j: Optional[Union[int, float, str]] = None
+    kdj_signal: Optional[str] = None
+    obv_trend: Optional[str] = None
+    obv_price_divergence: Optional[str] = None
+
+
 class DataPerspective(BaseModel):
     """Data perspective block."""
+
+    model_config = ConfigDict(extra="allow")
 
     trend_status: Optional[TrendStatus] = None
     price_position: Optional[PricePosition] = None
     volume_analysis: Optional[VolumeAnalysis] = None
     chip_structure: Optional[ChipStructure] = None
+    extended_indicators: Optional[ExtendedIndicators] = None
 
 
 class Intelligence(BaseModel):

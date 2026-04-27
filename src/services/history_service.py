@@ -734,6 +734,40 @@ class HistoryService:
                     f"{chip_data.get('concentration', 'N/A')} {chip_emoji}{chip_health}",
                     "",
                 ])
+            # 扩展指标（K线形态/布林带/ATR/KDJ/OBV）
+            ext_data = data_persp.get('extended_indicators', {}) if data_persp else {}
+            if ext_data:
+                ext_heading = "Extended Indicators" if report_language == "en" else "扩展指标"
+                report_lines.append(f"**📐 {ext_heading}**:")
+                ext_parts = []
+                kline_pattern = ext_data.get('kline_pattern')
+                if kline_pattern and kline_pattern not in ('N/A', '', '无明确形态'):
+                    kline_signal = ext_data.get('kline_signal', '')
+                    ext_parts.append(f"K线形态: {kline_pattern}" + (f" ({kline_signal})" if kline_signal else ""))
+                boll_upper = ext_data.get('boll_upper')
+                if boll_upper and boll_upper not in ('N/A', ''):
+                    boll_pos = ext_data.get('boll_position', 'N/A')
+                    boll_label = "BOLL" if report_language == "en" else "布林"
+                    ext_parts.append(f"{boll_label}: 上{boll_upper}/中{ext_data.get('boll_middle', 'N/A')}/下{ext_data.get('boll_lower', 'N/A')} ({boll_pos})")
+                atr_val = ext_data.get('atr_14')
+                if atr_val and atr_val not in ('N/A', ''):
+                    atr_stop = ext_data.get('atr_stop_loss_hint', 'N/A')
+                    ext_parts.append(f"ATR(14): {atr_val} | ATR止损: {atr_stop}")
+                kdj_k = ext_data.get('kdj_k')
+                if kdj_k and kdj_k not in ('N/A', ''):
+                    kdj_signal = ext_data.get('kdj_signal', '')
+                    ext_parts.append(f"KDJ: K={kdj_k}/D={ext_data.get('kdj_d', 'N/A')}/J={ext_data.get('kdj_j', 'N/A')}" + (f" ({kdj_signal})" if kdj_signal else ""))
+                obv_trend = ext_data.get('obv_trend')
+                if obv_trend and obv_trend not in ('N/A', ''):
+                    obv_div = ext_data.get('obv_price_divergence', '')
+                    ext_parts.append(f"OBV: {obv_trend}" + (f" ({obv_div})" if obv_div and obv_div != '无背离' else ""))
+                if ext_parts:
+                    report_lines.extend([
+                        "- " + "\n- ".join(ext_parts),
+                        "",
+                    ])
+                else:
+                    report_lines.append("")
 
         # ========== 作战计划 ==========
         battle = dashboard.get('battle_plan', {}) if dashboard else {}

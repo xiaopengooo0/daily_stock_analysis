@@ -17,6 +17,7 @@
 """
 
 import logging
+import math
 from dataclasses import dataclass, field
 from typing import Dict, Any, List
 from enum import Enum
@@ -126,6 +127,30 @@ class TrendAnalysisResult:
     rsi_status: RSIStatus = RSIStatus.NEUTRAL
     rsi_signal: str = ""              # RSI 信号描述
 
+    # K线形态识别
+    kline_pattern: str = ""            # K线形态名称（如"看涨吞没"）
+    kline_signal: str = ""             # K线形态信号描述
+
+    # 布林带
+    boll_upper: float = 0.0            # 布林带上轨
+    boll_middle: float = 0.0           # 布林带中轨（MA20）
+    boll_lower: float = 0.0            # 布林带下轨
+    boll_position: str = ""            # 价格在布林带中的位置描述
+
+    # ATR 波动率
+    atr_14: float = 0.0               # ATR(14) 平均真实波幅
+    atr_stop_loss_hint: float = 0.0   # 基于 ATR 的止损参考位（当前价 - 2*ATR）
+
+    # KDJ 指标
+    kdj_k: float = 0.0                # K 值
+    kdj_d: float = 0.0                # D 值
+    kdj_j: float = 0.0                # J 值
+    kdj_signal: str = ""              # KDJ 信号描述
+
+    # OBV 能量潮
+    obv_trend: str = ""               # OBV 趋势描述（上升/下降/平缓）
+    obv_price_divergence: bool = False # OBV 与价格是否背离
+
     # 买入信号
     buy_signal: BuySignal = BuySignal.WAIT
     signal_score: int = 0            # 综合评分 0-100
@@ -165,6 +190,20 @@ class TrendAnalysisResult:
             'rsi_24': self.rsi_24,
             'rsi_status': self.rsi_status.value,
             'rsi_signal': self.rsi_signal,
+            'kline_pattern': self.kline_pattern,
+            'kline_signal': self.kline_signal,
+            'boll_upper': self.boll_upper,
+            'boll_middle': self.boll_middle,
+            'boll_lower': self.boll_lower,
+            'boll_position': self.boll_position,
+            'atr_14': self.atr_14,
+            'atr_stop_loss_hint': self.atr_stop_loss_hint,
+            'kdj_k': self.kdj_k,
+            'kdj_d': self.kdj_d,
+            'kdj_j': self.kdj_j,
+            'kdj_signal': self.kdj_signal,
+            'obv_trend': self.obv_trend,
+            'obv_price_divergence': self.obv_price_divergence,
         }
 
 
@@ -230,6 +269,12 @@ class StockTrendAnalyzer:
         df = self._calculate_macd(df)
         df = self._calculate_rsi(df)
 
+        # 计算扩展指标
+        df = self._calculate_bollinger(df)
+        df = self._calculate_atr(df)
+        df = self._calculate_kdj(df)
+        df = self._calculate_obv(df)
+
         # 获取最新数据
         latest = df.iloc[-1]
         result.current_price = float(latest['close'])
@@ -256,7 +301,22 @@ class StockTrendAnalyzer:
         # 6. RSI 分析
         self._analyze_rsi(df, result)
 
-        # 7. 生成买入信号
+        # 7. K线形态分析
+        self._analyze_kline_pattern(df, result)
+
+        # 8. 布林带分析
+        self._analyze_bollinger(df, result)
+
+        # 9. ATR 波动率分析
+        self._analyze_atr(df, result)
+
+        # 10. KDJ 分析
+        self._analyze_kdj(df, result)
+
+        # 11. OBV 能量潮分析
+        self._analyze_obv(df, result)
+
+        # 12. 生成买入信号
         self._generate_signal(result)
 
         return result
@@ -742,7 +802,283 @@ class StockTrendAnalyzer:
             result.buy_signal = BuySignal.STRONG_SELL
         else:
             result.buy_signal = BuySignal.SELL
-    
+
+    # ========================================
+    # 扩展指标计算方法
+    # ========================================
+
+    def _calculate_bollinger(self, df: pd.DataFrame) -> pd.DataFrame:
+        """计算布林带（MA20 ± 2σ）"""
+        if df is None or len(df) < 20:
+            return df
+        df = df.copy()
+        ma20 = df['close'].rolling(window=20).mean()
+        std20 = df['close'].rolling(window=20).std()
+        df['BOLL_UPPER'] = ma20 + 2 * std20
+        df['BOLL_MIDDLE'] = ma20
+        df['BOLL_LOWER'] = ma20 - 2 * std20
+        return df
+
+    def _calculate_atr(self, df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
+        """计算 ATR（平均真实波幅）"""
+        if df is None or len(df) < period + 1:
+            return df
+        df = df.copy()
+        high = df['high']
+        low = df['low']
+        prev_close = df['close'].shift(1)
+        tr1 = high - low
+        tr2 = (high - prev_close).abs()
+        tr3 = (low - prev_close).abs()
+        df['TR'] = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+        df['ATR'] = df['TR'].rolling(window=period).mean()
+        return df
+
+    def _calculate_kdj(self, df: pd.DataFrame, period: int = 9) -> pd.DataFrame:
+        """计算 KDJ 指标"""
+        if df is None or len(df) < period:
+            return df
+        df = df.copy()
+        low_min = df['low'].rolling(window=period).min()
+        high_max = df['high'].rolling(window=period).max()
+        rsv = (df['close'] - low_min) / (high_max - low_min) * 100
+        rsv = rsv.fillna(50)
+
+        k_values = [50.0]
+        d_values = [50.0]
+        for i in range(1, len(df)):
+            k = 2 / 3 * k_values[-1] + 1 / 3 * rsv.iloc[i]
+            d = 2 / 3 * d_values[-1] + 1 / 3 * k
+            k_values.append(k)
+            d_values.append(d)
+
+        df['KDJ_K'] = k_values
+        df['KDJ_D'] = d_values
+        df['KDJ_J'] = 3 * pd.Series(k_values) - 2 * pd.Series(d_values)
+        return df
+
+    def _calculate_obv(self, df: pd.DataFrame) -> pd.DataFrame:
+        """计算 OBV（能量潮）"""
+        if df is None or len(df) < 2:
+            return df
+        df = df.copy()
+        obv = [0.0]
+        for i in range(1, len(df)):
+            if df['close'].iloc[i] > df['close'].iloc[i - 1]:
+                obv.append(obv[-1] + float(df['volume'].iloc[i]))
+            elif df['close'].iloc[i] < df['close'].iloc[i - 1]:
+                obv.append(obv[-1] - float(df['volume'].iloc[i]))
+            else:
+                obv.append(obv[-1])
+        df['OBV'] = obv
+        return df
+
+    # ========================================
+    # 扩展指标分析方法
+    # ========================================
+
+    def _analyze_kline_pattern(self, df: pd.DataFrame, result: TrendAnalysisResult) -> None:
+        """
+        识别 K 线形态（吞没、十字星、锤子线、早晨之星、黄昏之星等）
+        """
+        if df is None or len(df) < 3:
+            return
+
+        curr = df.iloc[-1]
+        prev = df.iloc[-2]
+
+        c_open = float(curr['open'])
+        c_close = float(curr['close'])
+        c_high = float(curr['high'])
+        c_low = float(curr['low'])
+        p_open = float(prev['open'])
+        p_close = float(prev['close'])
+
+        c_body = abs(c_close - c_open)
+        c_range = c_high - c_low if c_high != c_low else 0.001
+        p_body = abs(p_close - p_open)
+
+        detected = []
+
+        # 十字星（Doji）
+        if c_body < c_range * 0.05 and c_range > 0:
+            detected.append(("十字星", "⭐ 十字星形态，多空分歧，趋势可能反转", 1))
+
+        # 看涨吞没（Bullish Engulfing）
+        if p_close < p_open and c_close > c_open:
+            if c_close >= p_open and c_open <= p_close and c_body > p_body:
+                detected.append(("看涨吞没", "⭐ 看涨吞没形态，多头强势反转信号", 3))
+
+        # 看跌吞没（Bearish Engulfing）
+        if p_close > p_open and c_close < c_open:
+            if c_close <= p_open and c_open >= p_close and c_body > p_body:
+                detected.append(("看跌吞没", "⚠️ 看跌吞没形态，空头强势反转信号", 3))
+
+        # 锤子线（Hammer）
+        upper_shadow = c_high - max(c_open, c_close)
+        lower_shadow = min(c_open, c_close) - c_low
+        if c_body > 0 and lower_shadow >= 2 * c_body and upper_shadow < c_body * 0.5:
+            detected.append(("锤子线", "⭐ 锤子线形态，下跌中可能出现反转", 2))
+
+        # 倒锤子（Inverted Hammer）
+        if c_body > 0 and upper_shadow >= 2 * c_body and lower_shadow < c_body * 0.5:
+            detected.append(("倒锤子", "⚡ 倒锤子形态，上涨中需警惕回调", 2))
+
+        # 射击之星（Shooting Star）— 出现在上涨趋势中
+        if c_body > 0 and upper_shadow >= 2 * c_body and lower_shadow < c_body * 0.3:
+            detected.append(("射击之星", "⚠️ 射击之星形态，上涨动能衰竭", 2))
+
+        # 早晨之星（Morning Star）— 3 根 K 线
+        if len(df) >= 3:
+            bar0 = df.iloc[-3]
+            bar1 = df.iloc[-2]
+            bar2 = df.iloc[-1]
+            b0_body = abs(float(bar0['close']) - float(bar0['open']))
+            b0_bearish = float(bar0['close']) < float(bar0['open'])
+            b1_body = abs(float(bar1['close']) - float(bar1['open']))
+            b2_bullish = float(bar2['close']) > float(bar2['open'])
+            b2_body = abs(float(bar2['close']) - float(bar2['open']))
+            if b0_bearish and b0_body > 0 and b1_body < b0_body * 0.3 and b2_bullish and b2_body > b0_body * 0.5:
+                detected.append(("早晨之星", "⭐ 早晨之星形态，强烈看涨反转信号", 4))
+
+            # 黄昏之星（Evening Star）
+            b0_bullish = float(bar0['close']) > float(bar0['open'])
+            b2_bearish = float(bar2['close']) < float(bar2['open'])
+            if b0_bullish and b0_body > 0 and b1_body < b0_body * 0.3 and b2_bearish and b2_body > b0_body * 0.5:
+                detected.append(("黄昏之星", "⚠️ 黄昏之星形态，强烈看跌反转信号", 4))
+
+        if detected:
+            best = max(detected, key=lambda x: x[2])
+            result.kline_pattern = best[0]
+            result.kline_signal = best[1]
+
+    def _analyze_bollinger(self, df: pd.DataFrame, result: TrendAnalysisResult) -> None:
+        """分析布林带位置"""
+        if df is None or 'BOLL_UPPER' not in df.columns:
+            return
+        latest = df.iloc[-1]
+        upper = float(latest.get('BOLL_UPPER', 0))
+        middle = float(latest.get('BOLL_MIDDLE', 0))
+        lower = float(latest.get('BOLL_LOWER', 0))
+        price = float(latest['close'])
+
+        # NaN 防护：数据不足时 pandas 计算结果为 NaN
+        if math.isnan(upper) or math.isnan(lower) or math.isnan(price):
+            return
+
+        if upper == 0 or lower == 0:
+            return
+
+        result.boll_upper = upper
+        result.boll_middle = middle
+        result.boll_lower = lower
+
+        bandwidth = upper - lower
+        if bandwidth <= 0:
+            return
+
+        if price > upper:
+            result.boll_position = f"突破上轨（{price:.2f} > {upper:.2f}），短期超买"
+        elif price > middle + (upper - middle) * 0.7:
+            result.boll_position = f"接近上轨，偏强运行"
+        elif price >= middle:
+            result.boll_position = f"中轨上方运行，偏多"
+        elif price >= lower + (middle - lower) * 0.3:
+            result.boll_position = f"中轨下方运行，偏弱"
+        elif price > lower:
+            result.boll_position = f"接近下轨，偏弱运行"
+        else:
+            result.boll_position = f"跌破下轨（{price:.2f} < {lower:.2f}），短期超卖"
+
+    def _analyze_atr(self, df: pd.DataFrame, result: TrendAnalysisResult) -> None:
+        """分析 ATR 波动率"""
+        if df is None or 'ATR' not in df.columns:
+            return
+        latest = df.iloc[-1]
+        atr = float(latest.get('ATR', 0))
+        # NaN 防护
+        if math.isnan(atr) or atr <= 0:
+            return
+        result.atr_14 = atr
+        price = float(latest['close'])
+        if not math.isnan(price) and price > 0:
+            result.atr_stop_loss_hint = round(price - 2 * atr, 2)
+
+    def _analyze_kdj(self, df: pd.DataFrame, result: TrendAnalysisResult) -> None:
+        """分析 KDJ 指标"""
+        if df is None or 'KDJ_K' not in df.columns:
+            return
+        latest = df.iloc[-1]
+        k_val = float(latest.get('KDJ_K', 50))
+        d_val = float(latest.get('KDJ_D', 50))
+        j_val = float(latest.get('KDJ_J', 50))
+
+        # NaN 防护
+        if math.isnan(k_val) or math.isnan(d_val) or math.isnan(j_val):
+            return
+
+        result.kdj_k = k_val
+        result.kdj_d = d_val
+        result.kdj_j = j_val
+
+        k = result.kdj_k
+        d = result.kdj_d
+
+        if len(df) >= 2:
+            prev_k = float(df.iloc[-2].get('KDJ_K', 50))
+            prev_d = float(df.iloc[-2].get('KDJ_D', 50))
+            golden_cross = prev_k <= prev_d and k > d
+            death_cross = prev_k >= prev_d and k < d
+
+            if golden_cross and d < 20:
+                result.kdj_signal = "⭐ KDJ 低位金叉，强烈买入信号"
+            elif golden_cross:
+                result.kdj_signal = "✅ KDJ 金叉，趋势向上"
+            elif death_cross and d > 80:
+                result.kdj_signal = "⚠️ KDJ 高位死叉，强烈卖出信号"
+            elif death_cross:
+                result.kdj_signal = "⚠️ KDJ 死叉，趋势转弱"
+
+        if not result.kdj_signal:
+            if k > 80 and d > 80:
+                result.kdj_signal = "⚠️ KDJ 超买区域"
+            elif k < 20 and d < 20:
+                result.kdj_signal = "⚡ KDJ 超卖区域"
+            else:
+                result.kdj_signal = f"KDJ 中性区域 (K={k:.1f})"
+
+    def _analyze_obv(self, df: pd.DataFrame, result: TrendAnalysisResult) -> None:
+        """分析 OBV 能量潮"""
+        if df is None or 'OBV' not in df.columns or len(df) < 10:
+            return
+
+        obv = df['OBV']
+        close = df['close']
+
+        obv_recent = obv.iloc[-5:].values
+        obv_older = obv.iloc[-10:-5].values
+        close_recent = close.iloc[-5:].values
+        close_older = close.iloc[-10:-5].values
+
+        obv_recent_mean = float(np.mean(obv_recent))
+        obv_older_mean = float(np.mean(obv_older))
+        close_recent_mean = float(np.mean(close_recent))
+        close_older_mean = float(np.mean(close_older))
+
+        obv_rising = obv_recent_mean > obv_older_mean
+        price_rising = close_recent_mean > close_older_mean
+
+        if obv_rising and price_rising:
+            result.obv_trend = "上升（量价齐升）"
+        elif not obv_rising and not price_rising:
+            result.obv_trend = "下降（量价齐跌）"
+        elif obv_rising and not price_rising:
+            result.obv_trend = "上升（缩量下跌，资金未出逃）"
+        else:
+            result.obv_trend = "下降（放量下跌，资金出逃）"
+
+        result.obv_price_divergence = obv_rising != price_rising
+
     def format_analysis(self, result: TrendAnalysisResult) -> str:
         """
         格式化分析结果为文本
@@ -782,9 +1118,44 @@ class StockTrendAnalyzer:
             f"   RSI(24): {result.rsi_24:.1f}",
             f"   信号: {result.rsi_signal}",
             f"",
+        ]
+
+        if result.kline_pattern:
+            lines.append(f"📈 K线形态: {result.kline_pattern}")
+            lines.append(f"   {result.kline_signal}")
+            lines.append(f"")
+
+        if result.boll_position:
+            lines.extend([
+                f"📊 布林带: 上轨 {result.boll_upper:.2f} / 中轨 {result.boll_middle:.2f} / 下轨 {result.boll_lower:.2f}",
+                f"   位置: {result.boll_position}",
+                f"",
+            ])
+
+        if result.atr_14 > 0:
+            lines.extend([
+                f"📏 ATR(14): {result.atr_14:.2f}  ATR止损参考: {result.atr_stop_loss_hint:.2f}",
+                f"",
+            ])
+
+        if result.kdj_signal:
+            lines.extend([
+                f"📊 KDJ: K={result.kdj_k:.1f} D={result.kdj_d:.1f} J={result.kdj_j:.1f}",
+                f"   {result.kdj_signal}",
+                f"",
+            ])
+
+        if result.obv_trend:
+            div_text = " ⚠️ 与价格背离" if result.obv_price_divergence else ""
+            lines.extend([
+                f"📊 OBV: {result.obv_trend}{div_text}",
+                f"",
+            ])
+
+        lines.extend([
             f"🎯 操作建议: {result.buy_signal.value}",
             f"   综合评分: {result.signal_score}/100",
-        ]
+        ])
 
         if result.signal_reasons:
             lines.append(f"")

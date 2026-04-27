@@ -269,6 +269,73 @@ def fill_price_position_if_needed(
         logger.warning("[price_position] Fill failed, skipping: %s", e)
 
 
+def validate_stop_loss(result: "AnalysisResult", current_price: Optional[float] = None) -> None:
+    """Validate stop-loss position. Fix if stop_loss >= current_price for buy/hold decisions."""
+    if not result or not result.dashboard or result.decision_type == "sell":
+        return
+    try:
+        dash = result.dashboard
+        battle = dash.get("battle_plan")
+        if not isinstance(battle, dict):
+            return
+        sp = battle.get("sniper_points")
+        if not isinstance(sp, dict):
+            return
+
+        stop_loss_str = sp.get("stop_loss", "")
+        if not stop_loss_str or not isinstance(stop_loss_str, str):
+            return
+
+        import re as _re
+        numbers = _re.findall(r'[\d.]+', str(stop_loss_str))
+        if not numbers:
+            return
+
+        stop_loss_value = float(numbers[0])
+        price = current_price
+        if price is None:
+            price = result.current_price
+        if price is None or price <= 0:
+            return
+
+        if stop_loss_value >= price:
+            reasonable_stop = round(price * 0.95, 2)
+            sp["stop_loss"] = f"止损位：{reasonable_stop}元（原止损位不合理，已修正为当前价下方5%）"
+            logger.info(
+                "[stop_loss] 原止损位 %s >= 当前价 %s，已修正为 %s",
+                stop_loss_value, price, reasonable_stop,
+            )
+    except Exception as e:
+        logger.debug("[stop_loss] 校验失败，跳过: %s", e)
+
+
+def validate_score_advice_consistency(result: "AnalysisResult") -> None:
+    """Ensure sentiment_score and operation_advice are consistent."""
+    if not result or not result.success:
+        return
+    try:
+        score = result.sentiment_score
+        advice = (result.operation_advice or "").strip()
+        language = getattr(result, "report_language", "zh")
+
+        buy_keywords = ["买入", "加仓", "强烈买入", "Buy", "Strong Buy", "buy", "strong_buy"]
+        sell_keywords = ["卖出", "减仓", "强烈卖出", "Sell", "Strong Sell", "sell", "strong_sell"]
+
+        is_buy_advice = any(kw in advice for kw in buy_keywords)
+        is_sell_advice = any(kw in advice for kw in sell_keywords)
+
+        if score >= 70 and is_sell_advice:
+            result.operation_advice = "持有" if language == "zh" else "Hold"
+            result.decision_type = "hold"
+            logger.info("[一致性] 评分 %d 与卖出建议不一致，已修正为「持有」", score)
+        elif score <= 30 and is_buy_advice:
+            result.operation_advice = "观望" if language == "zh" else "Watch"
+            result.decision_type = "hold"
+            logger.info("[一致性] 评分 %d 与买入建议不一致，已修正为「观望」", score)
+    except Exception as e:
+        logger.debug("[一致性] 校验失败，跳过: %s", e)
+
+
 def get_stock_name_multi_source(
     stock_code: str,
     context: Optional[Dict] = None,
@@ -566,6 +633,22 @@ class GeminiAnalyzer:
                 "avg_cost": 平均成本,
                 "concentration": 筹码集中度,
                 "chip_health": "健康/一般/警惕"
+            },
+            "extended_indicators": {
+                "kline_pattern": "K线形态名称（如：看涨吞没/十字星/锤子线/无明确形态）",
+                "kline_signal": "K线信号方向（看多/看空/中性）",
+                "boll_upper": 布林带上轨数值,
+                "boll_middle": 布林带中轨数值,
+                "boll_lower": 布林带下轨数值,
+                "boll_position": "当前价在布林带中的位置（上轨附近/中轨附近/下轨附近/突破上轨/跌破下轨）",
+                "atr_14": ATR(14)数值,
+                "atr_stop_loss_hint": "基于ATR的止损参考价",
+                "kdj_k": KDJ_K值,
+                "kdj_d": KDJ_D值,
+                "kdj_j": KDJ_J值,
+                "kdj_signal": "KDJ信号方向（金叉看多/死叉看空/超买/超卖/中性）",
+                "obv_trend": "OBV趋势方向（上升/下降/持平）",
+                "obv_price_divergence": "OBV与价格背离情况（顶背离/底背离/无背离）"
             }
         },
 
@@ -716,6 +799,22 @@ class GeminiAnalyzer:
                 "avg_cost": 平均成本,
                 "concentration": 筹码集中度,
                 "chip_health": "健康/一般/警惕"
+            },
+            "extended_indicators": {
+                "kline_pattern": "K线形态名称（如：看涨吞没/十字星/锤子线/无明确形态）",
+                "kline_signal": "K线信号方向（看多/看空/中性）",
+                "boll_upper": 布林带上轨数值,
+                "boll_middle": 布林带中轨数值,
+                "boll_lower": 布林带下轨数值,
+                "boll_position": "当前价在布林带中的位置（上轨附近/中轨附近/下轨附近/突破上轨/跌破下轨）",
+                "atr_14": ATR(14)数值,
+                "atr_stop_loss_hint": "基于ATR的止损参考价",
+                "kdj_k": KDJ_K值,
+                "kdj_d": KDJ_D值,
+                "kdj_j": KDJ_J值,
+                "kdj_signal": "KDJ信号方向（金叉看多/死叉看空/超买/超卖/中性）",
+                "obv_trend": "OBV趋势方向（上升/下降/持平）",
+                "obv_price_divergence": "OBV与价格背离情况（顶背离/底背离/无背离）"
             }
         },
 
@@ -1300,6 +1399,11 @@ class GeminiAnalyzer:
         config = self._get_runtime_config()
         report_language = normalize_report_language(getattr(config, "report_language", "zh"))
         system_prompt = self._get_analysis_system_prompt(report_language, stock_code=code)
+
+        # 获取当前价格（用于止损位校验）
+        _realtime_price_for_validation = None
+        if isinstance(context.get('realtime'), dict):
+            _realtime_price_for_validation = context['realtime'].get('price')
         
         # 请求前增加延时（防止连续请求触发限流）
         request_delay = config.gemini_request_delay
@@ -1428,6 +1532,10 @@ class GeminiAnalyzer:
                         missing_fields,
                     )
                     break
+
+            # 后处理校验：止损位合理性 + 评分与建议一致性
+            validate_stop_loss(result, _realtime_price_for_validation)
+            validate_score_advice_consistency(result)
 
             persist_llm_usage(llm_usage, model_used, call_type="analysis", stock_code=code)
 
@@ -1644,7 +1752,133 @@ class GeminiAnalyzer:
 **风险因素**：
 {chr(10).join('- ' + r for r in trend.get('risk_factors', ['无'])) if trend.get('risk_factors') else '- 无'}
 """
-        
+
+        # 显式注入 MACD / RSI / 支撑压力位（避免 LLM 自行推断）
+        if 'trend_analysis' in context:
+            trend = context['trend_analysis']
+            macd_dif_val = trend.get('macd_dif', 0)
+            macd_dea_val = trend.get('macd_dea', 0)
+            macd_bar_val = trend.get('macd_bar', 0)
+            macd_status_val = trend.get('macd_status', '')
+            macd_signal_val = trend.get('macd_signal', '')
+            rsi_6_val = trend.get('rsi_6', 0)
+            rsi_12_val = trend.get('rsi_12', 0)
+            rsi_24_val = trend.get('rsi_24', 0)
+            rsi_status_val = trend.get('rsi_status', '')
+            rsi_signal_val = trend.get('rsi_signal', '')
+            support_levels_val = trend.get('support_levels', [])
+            resistance_levels_val = trend.get('resistance_levels', [])
+
+            support_text = ', '.join([f"{s:.2f}" for s in support_levels_val]) if support_levels_val else "暂无明确支撑位"
+            resistance_text = ', '.join([f"{s:.2f}" for s in resistance_levels_val]) if resistance_levels_val else "暂无明确压力位"
+
+            prompt += f"""
+### 技术指标详情（系统预计算）
+
+#### MACD 指标
+| 指标 | 数值 | 信号 |
+|------|------|------|
+| DIF | {macd_dif_val:.4f} | |
+| DEA | {macd_dea_val:.4f} | |
+| MACD 柱 | {macd_bar_val:.4f} | |
+| 状态 | {macd_status_val} | {macd_signal_val} |
+
+#### RSI 指标
+| 周期 | 数值 | 状态 |
+|------|------|------|
+| RSI(6) | {rsi_6_val:.1f} | |
+| RSI(12) | {rsi_12_val:.1f} | {rsi_status_val} |
+| RSI(24) | {rsi_24_val:.1f} | |
+| 信号 | {rsi_signal_val} | |
+
+#### 支撑与压力位
+| 类型 | 价位 |
+|------|------|
+| 支撑位 | {support_text} |
+| 压力位 | {resistance_text} |
+"""
+
+            # 扩展技术指标（K线形态/布林带/ATR/KDJ/OBV）
+            kline_pattern_val = trend.get('kline_pattern', '')
+            kline_signal_val = trend.get('kline_signal', '')
+            boll_upper_val = trend.get('boll_upper', 0)
+            boll_middle_val = trend.get('boll_middle', 0)
+            boll_lower_val = trend.get('boll_lower', 0)
+            boll_position_val = trend.get('boll_position', '')
+            atr_14_val = trend.get('atr_14', 0)
+            atr_stop_val = trend.get('atr_stop_loss_hint', 0)
+            kdj_k_val = trend.get('kdj_k', 0)
+            kdj_d_val = trend.get('kdj_d', 0)
+            kdj_j_val = trend.get('kdj_j', 0)
+            kdj_signal_val = trend.get('kdj_signal', '')
+            obv_trend_val = trend.get('obv_trend', '')
+            obv_div_val = trend.get('obv_price_divergence', False)
+
+            extra_indicators = []
+            if kline_pattern_val:
+                extra_indicators.append(f"- **K线形态**: {kline_pattern_val} — {kline_signal_val}")
+            if boll_position_val:
+                extra_indicators.append(f"- **布林带**: 上轨 {boll_upper_val:.2f} / 中轨 {boll_middle_val:.2f} / 下轨 {boll_lower_val:.2f}，{boll_position_val}")
+            if atr_14_val > 0:
+                extra_indicators.append(f"- **ATR(14)**: {atr_14_val:.2f}，ATR 止损参考: {atr_stop_val:.2f}（当前价 - 2×ATR）")
+            if kdj_signal_val:
+                extra_indicators.append(f"- **KDJ**: K={kdj_k_val:.1f} D={kdj_d_val:.1f} J={kdj_j_val:.1f}，{kdj_signal_val}")
+            if obv_trend_val:
+                div_text = "，⚠️ 与价格走势背离" if obv_div_val else ""
+                extra_indicators.append(f"- **OBV 能量潮**: {obv_trend_val}{div_text}")
+
+            if extra_indicators:
+                prompt += f"""
+### 扩展技术指标
+{chr(10).join(extra_indicators)}
+"""
+
+        # 近5日K线摘要
+        recent_kline = context.get('recent_kline_summary', [])
+        if recent_kline and len(recent_kline) >= 2:
+            kline_rows = []
+            for bar in recent_kline:
+                kline_rows.append(
+                    f"| {bar.get('date', 'N/A')} | {bar.get('open', 'N/A')} | "
+                    f"{bar.get('high', 'N/A')} | {bar.get('low', 'N/A')} | "
+                    f"{bar.get('close', 'N/A')} | {bar.get('pct_chg', 'N/A')}% |"
+                )
+            prompt += f"""
+### 近{len(recent_kline)}日K线走势
+| 日期 | 开盘 | 最高 | 最低 | 收盘 | 涨跌幅 |
+|------|------|------|------|------|--------|
+{chr(10).join(kline_rows)}
+"""
+
+        # 历史信号对比
+        history_signals = context.get('history_signals', [])
+        if history_signals:
+            history_rows = []
+            for sig in history_signals:
+                date_str = sig.get('created_at', 'N/A')[:10] if sig.get('created_at') else 'N/A'
+                history_rows.append(
+                    f"| {date_str} | {sig.get('sentiment_score', 'N/A')} | "
+                    f"{sig.get('operation_advice', 'N/A')} | {sig.get('trend_prediction', 'N/A')} |"
+                )
+            prompt += f"""
+### 近期分析信号变化
+| 日期 | 评分 | 操作建议 | 趋势判断 |
+|------|------|----------|----------|
+{chr(10).join(history_rows)}
+
+> 请结合历史信号趋势判断当前信号是否发生转向或强化。
+"""
+
+        # 板块相对强度
+        board_rs = context.get('board_relative_strength')
+        if board_rs:
+            prompt += f"""
+### 板块相对强度
+- 个股涨跌幅: {board_rs.get('stock_change_pct', 'N/A')}%
+- 板块平均涨跌幅: {board_rs.get('sector_avg_change_pct', 'N/A')}%
+- {board_rs.get('description', '')}
+"""
+
         # 添加昨日对比数据
         if 'yesterday' in context:
             volume_change = context.get('volume_change_ratio', 'N/A')

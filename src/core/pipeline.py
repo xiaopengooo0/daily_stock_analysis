@@ -37,6 +37,7 @@ from src.report_language import (
 )
 from src.search_service import SearchService
 from src.services.social_sentiment_service import SocialSentimentService
+from src.services.history_comparison_service import get_signal_changes
 from src.enums import ReportType
 from src.stock_analyzer import StockTrendAnalyzer, TrendAnalysisResult
 from src.core.trading_calendar import (
@@ -601,6 +602,34 @@ class StockAnalysisPipeline:
                 'signal_score': trend_result.signal_score,
                 'signal_reasons': trend_result.signal_reasons,
                 'risk_factors': trend_result.risk_factors,
+                # 扩展指标（K线形态/布林带/ATR/KDJ/OBV）
+                'kline_pattern': trend_result.kline_pattern,
+                'kline_signal': trend_result.kline_signal,
+                'boll_upper': trend_result.boll_upper,
+                'boll_middle': trend_result.boll_middle,
+                'boll_lower': trend_result.boll_lower,
+                'boll_position': trend_result.boll_position,
+                'atr_14': trend_result.atr_14,
+                'atr_stop_loss_hint': trend_result.atr_stop_loss_hint,
+                'kdj_k': trend_result.kdj_k,
+                'kdj_d': trend_result.kdj_d,
+                'kdj_j': trend_result.kdj_j,
+                'kdj_signal': trend_result.kdj_signal,
+                'obv_trend': trend_result.obv_trend,
+                'obv_price_divergence': trend_result.obv_price_divergence,
+                # MACD / RSI（已有字段，确保透传）
+                'macd_dif': trend_result.macd_dif,
+                'macd_dea': trend_result.macd_dea,
+                'macd_bar': trend_result.macd_bar,
+                'macd_status': trend_result.macd_status.value if hasattr(trend_result.macd_status, 'value') else trend_result.macd_status,
+                'macd_signal': trend_result.macd_signal,
+                'rsi_6': trend_result.rsi_6,
+                'rsi_12': trend_result.rsi_12,
+                'rsi_24': trend_result.rsi_24,
+                'rsi_status': trend_result.rsi_status.value if hasattr(trend_result.rsi_status, 'value') else trend_result.rsi_status,
+                'rsi_signal': trend_result.rsi_signal,
+                'support_levels': trend_result.support_levels,
+                'resistance_levels': trend_result.resistance_levels,
             }
 
         # Issue #234: Override today with realtime OHLC + trend MA for intraday analysis
@@ -682,6 +711,79 @@ class StockAnalysisPipeline:
                 "invalid fundamental context",
             )
         )
+
+        # 历史信号对比（近期分析信号变化趋势）
+        try:
+            code_for_history = context.get('code', '')
+            query_id_for_history = getattr(self, 'query_id', None)
+            history_signals = get_signal_changes(
+                code=code_for_history,
+                limit=3,
+                exclude_query_id=query_id_for_history,
+            )
+            if history_signals:
+                enhanced['history_signals'] = history_signals
+        except Exception as e:
+            logger.debug("历史信号对比获取失败(fail-open): %s", e)
+
+        # 近5日K线摘要（帮助 LLM 感知近期走势连续性）
+        try:
+            code_for_summary = context.get('code', '')
+            _mkt_summary = get_market_for_stock(normalize_stock_code(code_for_summary))
+            _end_summary = get_market_now(_mkt_summary).date()
+            _start_summary = _end_summary - timedelta(days=14)
+            recent_bars = self.db.get_data_range(code_for_summary, _start_summary, _end_summary)
+            if recent_bars and len(recent_bars) >= 2:
+                bars_to_use = recent_bars[-5:] if len(recent_bars) >= 5 else recent_bars[-len(recent_bars):]
+                kline_summary = []
+                for bar in bars_to_use:
+                    bar_dict = bar.to_dict() if hasattr(bar, 'to_dict') else {}
+                    kline_summary.append({
+                        'date': str(bar_dict.get('date', '')),
+                        'open': bar_dict.get('open'),
+                        'high': bar_dict.get('high'),
+                        'low': bar_dict.get('low'),
+                        'close': bar_dict.get('close'),
+                        'volume': bar_dict.get('volume'),
+                        'pct_chg': bar_dict.get('pct_chg'),
+                    })
+                if kline_summary:
+                    enhanced['recent_kline_summary'] = kline_summary
+        except Exception as e:
+            logger.debug("近5日K线摘要获取失败(fail-open): %s", e)
+
+        # 板块内相对强度（个股 vs 所属板块涨跌对比）
+        try:
+            realtime_for_board = context.get('realtime', {})
+            boards_data = fundamental_context.get('boards', {}) if isinstance(fundamental_context, dict) else {}
+            boards_status = boards_data.get('status', '') if isinstance(boards_data, dict) else ''
+
+            if boards_status == 'success' and realtime_for_board:
+                stock_change = realtime_for_board.get('change_pct')
+                sector_rankings = boards_data.get('data', {}).get('top', []) if isinstance(boards_data.get('data'), dict) else []
+                if stock_change is not None and sector_rankings:
+                    sector_changes = []
+                    for rank_item in sector_rankings[:10]:
+                        chg = rank_item.get('change_pct')
+                        if chg is not None:
+                            try:
+                                sector_changes.append(float(chg))
+                            except (TypeError, ValueError):
+                                pass
+                    if sector_changes:
+                        avg_sector_change = sum(sector_changes) / len(sector_changes)
+                        try:
+                            relative_strength = float(stock_change) - avg_sector_change
+                            enhanced['board_relative_strength'] = {
+                                'stock_change_pct': float(stock_change),
+                                'sector_avg_change_pct': round(avg_sector_change, 2),
+                                'relative_strength_pct': round(relative_strength, 2),
+                                'description': f"个股{'跑赢' if relative_strength > 0 else '跑输'}板块 {abs(relative_strength):.2f}%",
+                            }
+                        except (TypeError, ValueError):
+                            pass
+        except Exception as e:
+            logger.debug("板块相对强度计算失败(fail-open): %s", e)
 
         return enhanced
 

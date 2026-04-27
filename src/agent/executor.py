@@ -109,7 +109,16 @@ LEGACY_DEFAULT_AGENT_SYSTEM_PROMPT = """你是一位专注于趋势交易的{mar
             "trend_status": {{"ma_alignment": "", "is_bullish": true, "trend_score": 0}},
             "price_position": {{"current_price": 0, "ma5": 0, "ma10": 0, "ma20": 0, "bias_ma5": 0, "bias_status": "", "support_level": 0, "resistance_level": 0}},
             "volume_analysis": {{"volume_ratio": 0, "volume_status": "", "turnover_rate": 0, "volume_meaning": ""}},
-            "chip_structure": {{"profit_ratio": 0, "avg_cost": 0, "concentration": 0, "chip_health": ""}}
+            "chip_structure": {{"profit_ratio": 0, "avg_cost": 0, "concentration": 0, "chip_health": ""}},
+            "extended_indicators": {{
+                "kline_pattern": "K线形态名称",
+                "kline_signal": "看多/看空/中性",
+                "boll_upper": 0, "boll_middle": 0, "boll_lower": 0,
+                "boll_position": "当前价在布林带中的位置",
+                "atr_14": 0, "atr_stop_loss_hint": "ATR止损参考价",
+                "kdj_k": 0, "kdj_d": 0, "kdj_j": 0, "kdj_signal": "金叉看多/死叉看空/超买/超卖/中性",
+                "obv_trend": "上升/下降/持平", "obv_price_divergence": "顶背离/底背离/无背离"
+            }}
         }},
         "intelligence": {{
             "latest_news": "",
@@ -240,7 +249,16 @@ AGENT_SYSTEM_PROMPT = """你是一位{market_role}投资分析 Agent，拥有数
             "trend_status": {{"ma_alignment": "", "is_bullish": true, "trend_score": 0}},
             "price_position": {{"current_price": 0, "ma5": 0, "ma10": 0, "ma20": 0, "bias_ma5": 0, "bias_status": "", "support_level": 0, "resistance_level": 0}},
             "volume_analysis": {{"volume_ratio": 0, "volume_status": "", "turnover_rate": 0, "volume_meaning": ""}},
-            "chip_structure": {{"profit_ratio": 0, "avg_cost": 0, "concentration": 0, "chip_health": ""}}
+            "chip_structure": {{"profit_ratio": 0, "avg_cost": 0, "concentration": 0, "chip_health": ""}},
+            "extended_indicators": {{
+                "kline_pattern": "K线形态名称",
+                "kline_signal": "看多/看空/中性",
+                "boll_upper": 0, "boll_middle": 0, "boll_lower": 0,
+                "boll_position": "当前价在布林带中的位置",
+                "atr_14": 0, "atr_stop_loss_hint": "ATR止损参考价",
+                "kdj_k": 0, "kdj_d": 0, "kdj_j": 0, "kdj_signal": "金叉看多/死叉看空/超买/超卖/中性",
+                "obv_trend": "上升/下降/持平", "obv_price_divergence": "顶背离/底背离/无背离"
+            }}
         }},
         "intelligence": {{
             "latest_news": "",
