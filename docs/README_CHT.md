@@ -9,9 +9,8 @@
 [![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-Ready-2088FF?logo=github-actions&logoColor=white)](https://github.com/features/actions)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/r/zhulinsen/daily_stock_analysis)
 
-<p>
-  <a href="https://trendshift.io/repositories/18527" target="_blank"><img src="https://trendshift.io/api/badge/repositories/18527" alt="ZhuLinsen%2Fdaily_stock_analysis | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
-  <a href="https://hellogithub.com/repository/ZhuLinsen/daily_stock_analysis" target="_blank"><img src="https://api.hellogithub.com/v1/widgets/recommend.svg?rid=6daa16e405ce46ed97b4a57706aeb29f&claim_uid=pfiJMqhR9uvDGlT&theme=neutral" alt="Featured｜HelloGitHub" style="width: 250px; height: 54px;" width="250" height="54" /></a>
+<p align="center">
+  <a href="https://trendshift.io/repositories/18527" target="_blank"><img src="https://trendshift.io/api/badge/repositories/18527" alt="ZhuLinsen%2Fdaily_stock_analysis | Trendshift" width="230" /></a>&nbsp;<a href="https://hellogithub.com/repository/ZhuLinsen/daily_stock_analysis" target="_blank"><img src="https://api.hellogithub.com/v1/widgets/recommend.svg?rid=6daa16e405ce46ed97b4a57706aeb29f&claim_uid=pfiJMqhR9uvDGlT&theme=neutral" alt="Featured｜HelloGitHub" width="230" /></a>
 </p>
 
 **基於 AI 大模型的 A股/港股/美股自選股智能分析系統**
@@ -20,6 +19,8 @@
 
 [**功能特性**](#-功能特性) · [**快速開始**](#-快速開始) · [**推送效果**](#-推送效果) · [**完整指南**](./full-guide.md) · [**常見問題**](./FAQ.md) · [**更新日誌**](./CHANGELOG.md)
 
+> 本次為文件更新，未隨本次變更引入新的運行時能力；Anspire / AIHubMix / SerpAPI 等供應商配置為既有能力的使用口徑補充。
+
 繁體中文 | [English](README_EN.md) | [简体中文](../README.md)
 
 </div>
@@ -27,11 +28,11 @@
 ## 💖 贊助商 (Sponsors)
 
 <div align="center">
-  <a href="https://serpapi.com/baidu-search-api?utm_source=github_daily_stock_analysis" target="_blank">
-    <img src="../sources/serpapi_banner_zh.png" alt="輕鬆抓取搜尋引擎上的即時金融新聞數據 - SerpApi" height="160">
-  </a>
+  <p align="center">
+    <a href="https://open.anspire.cn/?share_code=QFBC0FYC" target="_blank"><img src="../sources/anspire.png" alt="Anspire Open 一站式模型和搜尋服務" width="300" height="141" style="width: 300px; height: 141px; object-fit: contain;"></a>
+    <a href="https://serpapi.com/baidu-search-api?utm_source=github_daily_stock_analysis" target="_blank"><img src="../sources/serpapi_banner_zh.png" alt="輕鬆抓取搜尋引擎上的即時金融新聞數據 - SerpApi" width="300" height="141" style="width: 300px; height: 141px; object-fit: contain;"></a>
+  </p>
 </div>
-<br>
 
 ## ✨ 功能特性
 
@@ -41,7 +42,7 @@
 | 分析 | 多維度分析 | 技術面、即時行情、籌碼分布、新聞輿情、公告、資金流與基本面聚合 |
 | 市場 | 全球市場 | 支援 A股、港股、美股、美股指數及常見 ETF |
 | 策略 | 市場策略系統 | 內建 A股復盤、美股 Regime、均線、纏論、波浪、情緒週期等策略能力 |
-| 復盤 | 大盤復盤 | 每日市場概覽、指數表現、漲跌統計與板塊強弱 |
+| 復盤 | 大盤復盤 | 每日市場概覽、指數表現、漲跌統計與板塊強弱（支援 cn / hk / us / both） |
 | Web | 雙主題工作台 | 支援手動分析、配置管理、任務進度、歷史報告、回測、持倉管理 |
 | 匯入 | 智能匯入與補全 | 支援圖片、CSV/Excel、剪貼簿匯入，自選股輸入支援代碼/名稱/拼音/別名補全 |
 | 歷史 | 報告管理 | 支援歷史報告查看、完整 Markdown 報告、重新分析與批量管理 |
@@ -56,9 +57,9 @@
 
 | 類型 | 支援 |
 |------|------|
-| AI 模型 | [AIHubMix](https://aihubmix.com/?aff=CfMq)、Gemini、OpenAI 兼容、DeepSeek、通義千問、Claude、Ollama 本地模型等 |
+| AI 模型 | [Anspire](https://open.anspire.cn/?share_code=QFBC0FYC)、[AIHubMix](https://aihubmix.com/?aff=CfMq)、Gemini、OpenAI 兼容、DeepSeek、通義千問、Claude、Ollama 本地模型等 |
 | 行情數據 | [TickFlow](https://tickflow.org/auth/register?ref=WDSGSPS5XC)、AkShare、Tushare、Pytdx、Baostock、YFinance、Longbridge |
-| 新聞搜尋 | [Anspire](https://aisearch.anspire.cn/)、[SerpAPI](https://serpapi.com/baidu-search-api?utm_source=github_daily_stock_analysis)、[Tavily](https://tavily.com/)、[Bocha](https://open.bocha.cn/)、[Brave](https://brave.com/search/api/)、[MiniMax](https://platform.minimaxi.com/)、SearXNG |
+| 新聞搜尋 | [Anspire](https://open.anspire.cn/?share_code=QFBC0FYC)、[SerpAPI](https://serpapi.com/baidu-search-api?utm_source=github_daily_stock_analysis)、[Tavily](https://tavily.com/)、[Bocha](https://open.bocha.cn/)、[Brave](https://brave.com/search/api/)、[MiniMax](https://platform.minimaxi.com/)、SearXNG |
 | 社交輿情 | [Stock Sentiment API](https://api.adanos.org/docs)（Reddit / X / Polymarket，僅美股，可選） |
 
 > 完整規則見 [數據源配置](./full-guide.md#数据源配置)。
@@ -81,11 +82,10 @@
 
 預設先選一個模型服務商並填寫 API Key；需要多模型、圖片識別、本地模型或高級路由時，再參考 [LLM 配置指南](./LLM_CONFIG_GUIDE.md)。
 
-> 推薦 [AIHubMix](https://aihubmix.com/?aff=CfMq)：一個 Key 即可使用 Gemini、GPT、Claude、DeepSeek 等全球主流模型，無需科學上網，含免費模型，付費模型高穩定性無限併發。本項目可享 10% 充值優惠。
-
 | Secret 名稱 | 說明 | 必填 |
 |-------------|------|:----:|
-| `AIHUBMIX_KEY` | AIHubMix API Key，一 Key 切換使用全系模型 | 可選 |
+| `ANSPIRE_API_KEYS` | [Anspire](https://open.anspire.cn/?share_code=QFBC0FYC) API Key，一 Key 同時啟用全球熱門大模型和聯網搜尋，含本項目免費額度 | **推薦** |
+| `AIHUBMIX_KEY` | [AIHubMix](https://aihubmix.com/?aff=CfMq) API Key，一 Key 切換使用全系模型，本項目可享 10% 優惠 | **推薦** |
 | `GEMINI_API_KEY` | Google Gemini API Key | 可選 |
 | `ANTHROPIC_API_KEY` | Anthropic Claude API Key | 可選 |
 | `OPENAI_API_KEY` | OpenAI 兼容 API Key（支援 DeepSeek、通義千問等） | 可選 |
@@ -118,7 +118,7 @@
 
 | Secret 名稱 | 說明 | 必填 |
 |-------------|------|:----:|
-| `ANSPIRE_API_KEYS` | [Anspire AI Search](https://aisearch.anspire.cn/)：中文內容特別優化，可增強 A 股分析效果 | 推薦 |
+| `ANSPIRE_API_KEYS` | [Anspire AI Search](https://aisearch.anspire.cn/)：中文內容特別優化，可增強 A 股分析效果；同一 Key 也可作為 Anspire 大模型網關兜底示例 | 推薦 |
 | `SERPAPI_API_KEYS` | [SerpAPI](https://serpapi.com/baidu-search-api?utm_source=github_daily_stock_analysis)：搜尋引擎結果補強，適合即時金融新聞 | 推薦 |
 | `TAVILY_API_KEYS` | [Tavily](https://tavily.com/)：通用新聞搜尋 API | 可選 |
 | `BOCHA_API_KEYS` | [博查搜尋](https://open.bocha.cn/)：中文搜尋優化，支援 AI 摘要 | 可選 |
@@ -256,23 +256,6 @@ DSA 聚焦日常分析報告；以下兩個同系列項目分別覆蓋選股、�
 | :---: | :---: | :---: |
 | <img src="../sources/alipay.jpg" width="200" alt="Alipay"> | <img src="../sources/wechatpay.jpg" width="200" alt="WeChat Pay"> | <img src="../sources/xiaohongshu.png" width="200" alt="小紅書"> |
 
-## 🤝 貢獻
-
-歡迎提交 Issue 和 Pull Request。提交前建議按改動面執行檢查：
-
-```bash
-# Python / 後端
-./scripts/ci_gate.sh
-
-# Web
-cd apps/dsa-web
-npm ci
-npm run lint
-npm run build
-```
-
-詳見 [貢獻指南](CONTRIBUTING.md)。
-
 ## 📄 License
 
 [MIT License](../LICENSE) © 2026 ZhuLinsen
@@ -282,7 +265,7 @@ npm run build
 ## 📬 聯繫與合作
 
 - GitHub Issues：[提交 Issue](https://github.com/ZhuLinsen/daily_stock_analysis/issues)
-- 合作郵箱：zhuls345@gmail.com
+- 合作郵箱：zhuls345@gmail.com（可溝通贊助合作、定制化開發、私有部署與二次開發）
 
 ## ⭐ Star History
 

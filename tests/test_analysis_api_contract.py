@@ -689,6 +689,73 @@ class AnalysisApiContractTestCase(unittest.TestCase):
             notify=True,
         )
 
+    def test_trigger_analysis_accepts_bse_suffix_code_from_autocomplete(self) -> None:
+        if trigger_analysis is None:
+            self.skipTest("fastapi is not installed in this test environment")
+
+        queue = MagicMock()
+        queue.submit_tasks_batch.return_value = ([], [])
+
+        with patch("api.v1.endpoints.analysis.get_task_queue", return_value=queue), \
+             patch("api.v1.endpoints.analysis.resolve_name_to_code") as resolve_mock:
+            response = trigger_analysis(
+                request=SimpleNamespace(
+                    stock_code="920493.BJ",
+                    stock_codes=None,
+                    stock_name="示例北交所股票",
+                    original_query="920493",
+                    selection_source="autocomplete",
+                    report_type="detailed",
+                    force_refresh=False,
+                    async_mode=True,
+                    notify=True,
+                ),
+                config=SimpleNamespace(),
+            )
+
+        self.assertEqual(response.status_code, 202)
+        resolve_mock.assert_not_called()
+        queue.submit_tasks_batch.assert_called_once_with(
+            stock_codes=["920493.BJ"],
+            stock_name="示例北交所股票",
+            original_query="920493",
+            selection_source="autocomplete",
+            report_type="detailed",
+            force_refresh=False,
+            notify=True,
+        )
+
+    def test_trigger_analysis_rejects_non_bse_code_with_bj_exchange_hint(self) -> None:
+        if trigger_analysis is None:
+            self.skipTest("fastapi is not installed in this test environment")
+
+        for bad_code in ("600519.BJ", "BJ600519"):
+            with self.subTest(bad_code=bad_code):
+                queue = MagicMock()
+
+                with patch("api.v1.endpoints.analysis.get_task_queue", return_value=queue), \
+                     patch("api.v1.endpoints.analysis.resolve_name_to_code") as resolve_mock:
+                    with self.assertRaises(Exception) as exc:
+                        trigger_analysis(
+                            request=SimpleNamespace(
+                                stock_code=bad_code,
+                                stock_codes=None,
+                                stock_name=None,
+                                original_query=bad_code,
+                                selection_source="manual",
+                                report_type="detailed",
+                                force_refresh=False,
+                                async_mode=True,
+                                notify=True,
+                            ),
+                            config=SimpleNamespace(),
+                        )
+
+                self.assertEqual(exc.exception.status_code, 400)
+                self.assertEqual(exc.exception.detail["error"], "validation_error")
+                resolve_mock.assert_not_called()
+                queue.submit_tasks_batch.assert_not_called()
+
     def test_trigger_analysis_accepts_hk_prefixed_code(self) -> None:
         if trigger_analysis is None:
             self.skipTest("fastapi is not installed in this test environment")
@@ -939,6 +1006,38 @@ class AnalysisApiContractTestCase(unittest.TestCase):
             json.loads(response.body),
             {"error": "not_found", "message": "API endpoint /api not found"},
         )
+
+    def test_spa_fallback_blocks_path_traversal(self) -> None:
+        """SPA fallback must not serve files outside static_dir.
+
+        Starlette's :path converter does not normalize `..` segments, so
+        without an explicit containment check `static_dir / full_path` can
+        resolve to arbitrary files on disk (CVE-class path traversal).
+        """
+        if create_app is None:
+            self.skipTest("fastapi is not installed in this test environment")
+
+        from fastapi.responses import FileResponse
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            static_dir = root / "static"
+            static_dir.mkdir()
+            (static_dir / "index.html").write_text("<html>spa</html>", encoding="utf-8")
+            secret = root / "secret.txt"
+            secret.write_text("TOPSECRET", encoding="utf-8")
+
+            app = create_app(static_dir=static_dir)
+            serve_spa = next(
+                route.endpoint for route in app.routes
+                if getattr(route, "path", None) == "/{full_path:path}"
+            )
+
+            for traversal in ("../secret.txt", "../../secret.txt", "foo/../../secret.txt"):
+                with self.subTest(traversal=traversal):
+                    response = asyncio.run(serve_spa(None, traversal))
+                    self.assertIsInstance(response, FileResponse)
+                    self.assertEqual(Path(response.path).resolve(), (static_dir / "index.html").resolve())
 
     def test_sse_generator_reraises_cancelled_error(self) -> None:
         """CancelledError must propagate (not be swallowed) from the SSE event generator."""
