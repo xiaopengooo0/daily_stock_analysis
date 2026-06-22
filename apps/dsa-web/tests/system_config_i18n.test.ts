@@ -1,17 +1,24 @@
 import { describe, expect, it } from 'vitest';
+import { getSettingsHelpContent } from '../src/locales/settingsHelp';
 import { getFieldDescriptionZh, getFieldOptionLabelZh, getFieldTitleZh } from '../src/utils/systemConfigI18n';
 
 const requiredLocalizedKeys = [
   'TICKFLOW_API_KEY',
+  'STOCK_INDEX_REMOTE_UPDATE_ENABLED',
+  'SEARXNG_BASE_URLS',
   'ENABLE_REALTIME_QUOTE',
   'ENABLE_CHIP_DISTRIBUTION',
   'PYTDX_HOST',
   'PYTDX_PORT',
   'PYTDX_SERVERS',
   'BIAS_THRESHOLD',
+  'LLM_USAGE_HMAC_SECRET',
+  'LLM_USAGE_HMAC_KEY_VERSION',
   'TELEGRAM_BOT_TOKEN',
   'TELEGRAM_CHAT_ID',
   'TELEGRAM_MESSAGE_THREAD_ID',
+  'FEISHU_STREAM_ENABLED',
+  'DINGTALK_STREAM_ENABLED',
   'EMAIL_SENDER',
   'EMAIL_PASSWORD',
   'EMAIL_RECEIVERS',
@@ -52,12 +59,17 @@ const requiredLocalizedKeys = [
   'SCHEDULE_RUN_IMMEDIATELY',
   'TRADING_DAY_CHECK_ENABLED',
   'WEBUI_HOST',
+  'LOG_DIR',
+  'WEBUI_ENABLED',
+  'WEBUI_AUTO_BUILD',
   'ADMIN_AUTH_ENABLED',
   'TRUST_X_FORWARDED_FOR',
   'RUN_IMMEDIATELY',
   'MARKET_REVIEW_ENABLED',
+  'DAILY_MARKET_CONTEXT_ENABLED',
   'MARKET_REVIEW_REGION',
   'ANALYSIS_DELAY',
+  'SAVE_CONTEXT_SNAPSHOT',
   'DEBUG',
   'AGENT_NL_ROUTING',
   'AGENT_DEEP_RESEARCH_BUDGET',
@@ -73,6 +85,23 @@ describe('systemConfigI18n required key coverage', () => {
       expect(getFieldTitleZh(key, key)).not.toBe(key);
       expect(getFieldDescriptionZh(key, 'schema fallback description')).not.toBe('schema fallback description');
     });
+  });
+
+  it('uses a Chinese primary title for SearXNG base URLs', () => {
+    const title = getFieldTitleZh('SEARXNG_BASE_URLS', 'SEARXNG_BASE_URLS');
+
+    expect(title).toBe('SearXNG 自建实例地址');
+    expect(title).not.toBe('SearXNG Base URLs');
+  });
+
+  it('documents LLM usage HMAC privacy boundaries', () => {
+    const zh = getSettingsHelpContent('settings.ai_model.LLM_USAGE_HMAC_SECRET', undefined, 'zh-CN');
+    const en = getSettingsHelpContent('settings.ai_model.LLM_USAGE_HMAC_SECRET', undefined, 'en');
+
+    expect(zh?.summary).toContain('HMAC');
+    expect(zh?.notes?.join(' ')).toContain('不要');
+    expect(en?.summary).toContain('HMAC');
+    expect(en?.notes?.join(' ')).toContain('Do not');
   });
 });
 
@@ -122,6 +151,40 @@ describe('systemConfigI18n option label localization', () => {
       if (fallbackLabel) {
         expect(label).not.toBe(fallbackLabel);
       }
+    });
+  });
+});
+
+describe('SAVE_CONTEXT_SNAPSHOT settings help contract', () => {
+  it('describes the persistence boundary without implying old records are changed', () => {
+    const help = getSettingsHelpContent('settings.system.SAVE_CONTEXT_SNAPSHOT', undefined, 'zh-CN');
+    const text = [
+      help?.summary,
+      help?.usage,
+      ...(help?.valueNotes ?? []),
+      ...(help?.impact ?? []),
+      ...(help?.notes ?? []),
+    ].join('\n');
+
+    expect(text).toContain('新历史记录');
+    expect(text).toContain('不关闭当次 AnalysisContextPack 构建');
+    expect(text).toContain('不关闭 LLM Prompt');
+    expect(text).not.toContain('旧记录');
+  });
+});
+
+describe('decision signal settings guard', () => {
+  it('does not add placeholder DecisionSignal setting translations without a real schema field', () => {
+    const placeholderKeys = [
+      'DECISION_SIGNAL_ENABLED',
+      'DECISION_SIGNALS_ENABLED',
+      'DECISION_SIGNAL_WRITE_ENABLED',
+      'DECISION_SIGNAL_EXTRACT_ENABLED',
+    ];
+
+    placeholderKeys.forEach((key) => {
+      expect(getFieldTitleZh(key, key)).toBe(key);
+      expect(getFieldDescriptionZh(key, 'schema fallback description')).toBe('schema fallback description');
     });
   });
 });
